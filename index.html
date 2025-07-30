@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geomechanical Restoration - Interactive FEM</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            color: white;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            width: 300px;
+            z-index: 100;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-section h3 {
+            margin: 0 0 15px 0;
+            color: #4fc3f7;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .mode-button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .mode-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .mode-button.active {
+            background: linear-gradient(45deg, #f093fb, #f5576c);
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.5);
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #b0bec5;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 15px;
+            max-width: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 200px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #4caf50, #81c784);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .value-display {
+            color: #4fc3f7;
+            font-weight: bold;
+        }
+
+        input[type="number"] {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            padding: 5px;
+            width: 80px;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <canvas id="canvas"></canvas>
+
+        <div id="controls">
+            <div class="control-section">
+                <h3>Interaction Mode</h3>
+                <button class="mode-button active" id="selectMode">Select Nodes</button>
+                <button class="mode-button" id="fixityMode">Set Fixities</button>
+                <button class="mode-button" id="forceMode">Apply Forces</button>
+                <button class="mode-button" id="restoreMode">Restoration</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Geometry Setup</h3>
+                <button class="mode-button" id="createSimple">Simple Fold</button>
+                <button class="mode-button" id="createComplex">Complex Fold</button>
+                <button class="mode-button" id="clearMesh">Clear All</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Material Properties</h3>
+                <div class="slider-container">
+                    <label>Young's Modulus (GPa): <span id="youngValue" class="value-display">30</span></label>
+                    <input type="range" id="youngModulus" min="1" max="100" value="30">
+                </div>
+                <div class="slider-container">
+                    <label>Poisson's Ratio: <span id="poissonValue" class="value-display">0.25</span></label>
+                    <input type="range" id="poissonRatio" min="0.1" max="0.49" step="0.01" value="0.25">
+                </div>
+                <div class="slider-container">
+                    <label>Density (kg/m³): <span id="densityValue" class="value-display">2500</span></label>
+                    <input type="range" id="density" min="1000" max="5000" step="100" value="2500">
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Solver Control</h3>
+                <div class="slider-container">
+                    <label>Convergence: <span id="convergenceValue" class="value-display">1e-6</span></label>
+                    <input type="range" id="convergence" min="-8" max="-3" step="0.1" value="-6">
+                </div>
+                <div class="slider-container">
+                    <label>Max Iterations: <span id="maxIterValue" class="value-display">5000</span></label>
+                    <input type="range" id="maxIterations" min="100" max="10000" step="100" value="5000">
+                </div>
+                <div class="slider-container">
+                    <label>Damping: <span id="dampingValue" class="value-display">0.8</span></label>
+                    <input type="range" id="damping" min="0.1" max="1.0" step="0.05" value="0.8">
+                </div>
+                <button class="mode-button" id="startSolver">Start Solver</button>
+                <button class="mode-button" id="stepSolver">Step by Step</button>
+                <button class="mode-button" id="pauseSolver">Pause/Resume</button>
+                <button class="mode-button" id="resetSolver">Reset</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Force Input</h3>
+                <label>Force X: <input type="number" id="forceX" value="0" step="1000"></label>
+                <label>Force Y: <input type="number" id="forceY" value="-10000" step="1000"></label>
+            </div>
+        </div>
+
+        <div id="status">
+            <h3>Solver Status</h3>
+            <div id="statusText">Ready</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div>Iteration: <span id="iterationCount" class="value-display">0</span></div>
+            <div>Error: <span id="errorValue" class="value-display">∞</span></div>
+            <div>Max Displacement: <span id="maxDisp" class="value-display">0</span></div>
+        </div>
+
+        <div id="info">
+            <h3>Instructions</h3>
+            <p><strong>Select Mode:</strong> Click nodes to select/deselect</p>
+            <p><strong>Fixity Mode:</strong> Click selected nodes to toggle fixities</p>
+            <p><strong>Force Mode:</strong> Click nodes to apply forces</p>
+            <p><strong>Restoration Mode:</strong> Click nodes for restoration targets</p>
+            <p><strong>Camera:</strong> Mouse to orbit, wheel to zoom</p>
+        </div>
+    </div>
+
+    <script src="dist/bundle.js"></script>
+
+    <script>
+        // Three.js visualization setup
+        let scene, camera, renderer, controls;
+        let fem = new dynel.GeomechanicalRestoration();
+        let currentMode = 'select';
+        let selectedNodes = new Set();
+        let nodeObjects = new Map();
+        let triangleObjects = new Map();
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let isAnimating = false;
+
+        // Colors
+        const COLORS = {
+            node: {
+                default: 0x4fc3f7,
+                selected: 0xf093fb,
+                fixed: 0xff5722,
+                force: 0x4caf50
+            },
+            triangle: {
+                default: 0x263238,
+                stressed: 0xff9800
+            }
+        };
+
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // Camera setup
+            // camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            const aspect = width / height;
+            const frustumSize = 50;
+            camera = new THREE.OrthographicCamera(frustumSize * aspect / - 2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / - 2, 0.1, 100);
+
+            camera.position.set(0, 0, 50);
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('canvas'),
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 50, 50);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Simple orbit controls (mouse interaction)
+            setupControls();
+
+            // Event listeners
+            setupEventListeners();
+
+            // Create initial geometry
+            createSimpleFold();
+
+            // Start render loop
+            animate();
+        }
+
+        function setupControls() {
+            let isMouseDown = false;
+            let mouseX = 0, mouseY = 0;
+
+            document.addEventListener('mousedown', (event) => {
+                if (event.target.id === 'canvas') {
+                    isMouseDown = true;
+                    mouseX = event.clientX;
+                    mouseY = event.clientY;
+                }
+            });
+
+            document.addEventListener('mousemove', (event) => {
+                if (isMouseDown && event.target.id === 'canvas') {
+                    const deltaX = event.clientX - mouseX;
+                    const deltaY = event.clientY - mouseY;
+
+                    const scaleX = (camera.right - camera.left) / window.innerWidth;
+                    const scaleY = (camera.top - camera.bottom) / window.innerHeight;
+
+                    camera.left -= deltaX * scaleX;
+                    camera.right -= deltaX * scaleX;
+                    camera.top += deltaY * scaleY;
+                    camera.bottom += deltaY * scaleY;
+
+                    camera.updateProjectionMatrix();
+
+                    mouseX = event.clientX;
+                    mouseY = event.clientY;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isMouseDown = false;
+            });
+
+            document.addEventListener('wheel', (event) => {
+                if (event.target.id === 'canvas') {
+                    // camera.position.z += event.deltaY * 0.01;
+                    // camera.position.z = Math.max(10, Math.min(100, camera.position.z));
+                    const zoomFactor = 1 + (event.deltaY * 0.001);
+                    const aspect = window.innerWidth / window.innerHeight;
+
+                    camera.left *= zoomFactor;
+                    camera.right *= zoomFactor;
+                    camera.top *= zoomFactor;
+                    camera.bottom *= zoomFactor;
+
+                    camera.updateProjectionMatrix();
+                }
+            });
+        }
+
+        function setupEventListeners() {
+            // Mode buttons
+            document.getElementById('selectMode').addEventListener('click', () => setMode('select'));
+            document.getElementById('fixityMode').addEventListener('click', () => setMode('fixity'));
+            document.getElementById('forceMode').addEventListener('click', () => setMode('force'));
+            document.getElementById('restoreMode').addEventListener('click', () => setMode('restore'));
+
+            // Geometry buttons
+            document.getElementById('createSimple').addEventListener('click', createSimpleFold);
+            document.getElementById('createComplex').addEventListener('click', createComplexFold);
+            document.getElementById('clearMesh').addEventListener('click', clearMesh);
+
+            // Solver buttons
+            document.getElementById('startSolver').addEventListener('click', startSolver);
+            document.getElementById('stepSolver').addEventListener('click', stepSolver);
+            document.getElementById('pauseSolver').addEventListener('click', pauseSolver);
+            document.getElementById('resetSolver').addEventListener('click', resetSolver);
+
+            // Sliders
+            document.getElementById('youngModulus').addEventListener('input', updateMaterialProperties);
+            document.getElementById('poissonRatio').addEventListener('input', updateMaterialProperties);
+            document.getElementById('density').addEventListener('input', updateMaterialProperties);
+            document.getElementById('convergence').addEventListener('input', updateSolverParameters);
+            document.getElementById('maxIterations').addEventListener('input', updateSolverParameters);
+            document.getElementById('damping').addEventListener('input', updateSolverParameters);
+
+            // Canvas click
+            document.getElementById('canvas').addEventListener('click', onCanvasClick);
+
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(mode + 'Mode').classList.add('active');
+
+            // Clear selection when changing modes
+            selectedNodes.clear();
+            updateNodeVisuals();
+        }
+
+        function createSimpleFold() {
+            clearMesh();
+
+            const limestone = {
+                youngModulus: parseFloat(document.getElementById('youngModulus').value) * 1e9,
+                poissonRatio: parseFloat(document.getElementById('poissonRatio').value),
+                density: parseFloat(document.getElementById('density').value)
+            };
+
+            // Create a simple folded geometry (anticline)
+            const width = 20;
+            const height = 10;
+            const amplitude = 3;
+
+            // Create nodes in a grid with folding
+            let nodeId = 0;
+            for (let j = 0; j <= 4; j++) {
+                for (let i = 0; i <= 10; i++) {
+                    const x = (i / 10) * width - width / 2;
+                    const baseY = (j / 4) * height - height / 2;
+
+                    // Add folding - sinusoidal deformation
+                    const foldY = j > 0 ? amplitude * Math.sin((i / 10) * Math.PI) * (j / 4) : 0;
+                    const y = baseY + foldY - height;
+
+                    // console.log(x,y)
+
+                    fem.addNode(nodeId, x, y);
+                    nodeId++;
+                }
+            }
+
+            // Create triangular elements
+            let triangleId = 0;
+            for (let j = 0; j < 4; j++) {
+                for (let i = 0; i < 10; i++) {
+                    const n1 = j * 11 + i;
+                    const n2 = j * 11 + i + 1;
+                    const n3 = (j + 1) * 11 + i;
+                    const n4 = (j + 1) * 11 + i + 1;
+
+                    // Create two triangles per quad
+                    fem.addTriangle(triangleId++, [n1, n2, n3], limestone);
+                    fem.addTriangle(triangleId++, [n2, n4, n3], limestone);
+                }
+            }
+
+            // Fix bottom nodes
+            for (let i = 0; i <= 10; i++) {
+                fem.setFixedNode(i, true, true);
+            }
+
+            updateVisualization();
+        }
+
+        function createComplexFold() {
+            clearMesh();
+
+            const limestone = {
+                youngModulus: parseFloat(document.getElementById('youngModulus').value) * 1e9,
+                poissonRatio: parseFloat(document.getElementById('poissonRatio').value),
+                density: parseFloat(document.getElementById('density').value)
+            };
+
+            // Create a more complex folded geometry with fault
+            const width = 30;
+            const height = 15;
+            const amplitude = 4;
+
+            let nodeId = 0;
+            for (let j = 0; j <= 6; j++) {
+                for (let i = 0; i <= 15; i++) {
+                    const x = (i / 15) * width - width / 2;
+                    const baseY = (j / 6) * height - height / 2;
+
+                    // Complex folding with multiple wavelengths
+                    let foldY = 0;
+                    if (j > 0) {
+                        foldY = amplitude * Math.sin((i / 15) * Math.PI * 2) * (j / 6) * 0.7 +
+                            amplitude * 0.3 * Math.sin((i / 15) * Math.PI * 4) * (j / 6);
+                    }
+
+                    // Add fault offset
+                    let faultOffset = 0;
+                    if (i > 7 && j < 4) {
+                        faultOffset = -1.5;
+                    }
+
+                    const y = baseY + foldY + faultOffset;
+
+                    fem.addNode(nodeId, x, y);
+                    nodeId++;
+                }
+            }
+
+            // Create triangular elements
+            let triangleId = 0;
+            for (let j = 0; j < 6; j++) {
+                for (let i = 0; i < 15; i++) {
+                    const n1 = j * 16 + i;
+                    const n2 = j * 16 + i + 1;
+                    const n3 = (j + 1) * 16 + i;
+                    const n4 = (j + 1) * 16 + i + 1;
+
+                    // Skip elements across the fault
+                    if (!(i === 7 && j < 3)) {
+                        fem.addTriangle(triangleId++, [n1, n2, n3], limestone);
+                        fem.addTriangle(triangleId++, [n2, n4, n3], limestone);
+                    }
+                }
+            }
+
+            // Fix bottom and side nodes
+            for (let i = 0; i <= 15; i++) {
+                fem.setFixedNode(i, true, true); // Bottom
+            }
+            for (let j = 0; j <= 6; j++) {
+                fem.setFixedNode(j * 16, true, false); // Left side
+                fem.setFixedNode(j * 16 + 15, true, false); // Right side
+            }
+
+            updateVisualization();
+        }
+
+        function clearMesh() {
+            fem = new dynel.GeomechanicalRestoration();
+            selectedNodes.clear();
+
+            // Clear Three.js objects
+            nodeObjects.clear();
+            triangleObjects.clear();
+
+            // Remove all mesh objects from scene
+            const objectsToRemove = [];
+            scene.traverse((child) => {
+                if (child.userData.type === 'node' || child.userData.type === 'triangle') {
+                    objectsToRemove.push(child);
+                }
+            });
+            objectsToRemove.forEach(obj => scene.remove(obj));
+
+            updateVisualization();
+        }
+
+        function updateMaterialProperties() {
+            const youngValue = document.getElementById('youngModulus').value;
+            const poissonValue = document.getElementById('poissonRatio').value;
+            const densityValue = document.getElementById('density').value;
+
+            document.getElementById('youngValue').textContent = youngValue;
+            document.getElementById('poissonValue').textContent = poissonValue;
+            document.getElementById('densityValue').textContent = densityValue;
+
+            // Update all triangle materials
+            const newProps = {
+                youngModulus: parseFloat(youngValue) * 1e9,
+                poissonRatio: parseFloat(poissonValue),
+                density: parseFloat(densityValue)
+            };
+
+            for (const triangle of fem.triangles.values()) {
+                triangle.materialProps = newProps;
+            }
+        }
+
+        function updateSolverParameters() {
+            const convergenceValue = document.getElementById('convergence').value;
+            const maxIterValue = document.getElementById('maxIterations').value;
+            const dampingValue = document.getElementById('damping').value;
+
+            fem.convergenceThreshold = Math.pow(10, parseFloat(convergenceValue));
+            fem.maxIterations = parseInt(maxIterValue);
+            fem.damping = parseFloat(dampingValue);
+
+            document.getElementById('convergenceValue').textContent = fem.convergenceThreshold.toExponential(0);
+            document.getElementById('maxIterValue').textContent = maxIterValue;
+            document.getElementById('dampingValue').textContent = dampingValue;
+        }
+
+        function onCanvasClick(event) {
+            // Calculate mouse position in normalized device coordinates
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            // Update raycaster
+            raycaster.setFromCamera(mouse, camera);
+
+            // Find intersected nodes
+            const nodeObjectsArray = Array.from(nodeObjects.values());
+            const intersects = raycaster.intersectObjects(nodeObjectsArray);
+
+            if (intersects.length > 0) {
+                const clickedObject = intersects[0].object;
+                const nodeId = clickedObject.userData.nodeId;
+
+                handleNodeClick(nodeId);
+            }
+        }
+
+        function handleNodeClick(nodeId) {
+            const node = fem.nodes.get(nodeId);
+            if (!node) return;
+
+            switch (currentMode) {
+                case 'select':
+                    if (selectedNodes.has(nodeId)) {
+                        selectedNodes.delete(nodeId);
+                    } else {
+                        selectedNodes.add(nodeId);
+                    }
+                    break;
+
+                case 'fixity':
+                    if (selectedNodes.has(nodeId)) {
+                        fem.setFixedNode(nodeId, !node.fixedX, !node.fixedY);
+                    } else {
+                        fem.setFixedNode(nodeId, !node.fixedX, !node.fixedY);
+                    }
+                    break;
+
+                case 'force':
+                    const forceX = parseFloat(document.getElementById('forceX').value);
+                    const forceY = parseFloat(document.getElementById('forceY').value);
+                    fem.applyForce(nodeId, forceX, forceY);
+                    break;
+
+                case 'restore':
+                    // Set as restoration target (flatten to horizontal)
+                    const targetY = 0;
+                    fem.setFixedNode(nodeId, false, true);
+                    node.position.y = targetY;
+                    break;
+            }
+
+            updateNodeVisuals();
+        }
+
+        function updateVisualization() {
+            // Clear existing objects
+            nodeObjects.clear();
+            triangleObjects.clear();
+
+            const objectsToRemove = [];
+            scene.traverse((child) => {
+                if (child.userData.type === 'node' || child.userData.type === 'triangle') {
+                    objectsToRemove.push(child);
+                }
+            });
+            objectsToRemove.forEach(obj => scene.remove(obj));
+
+            // Create triangle meshes
+            for (const triangle of fem.triangles.values()) {
+                createTriangleObject(triangle);
+            }
+
+            // Create node objects
+            for (const node of fem.nodes.values()) {
+                createNodeObject(node);
+            }
+
+            updateNodeVisuals();
+        }
+
+        function createTriangleObject(triangle) {
+            const [id1, id2, id3] = triangle.nodeIds;
+            const nodes = [
+                fem.nodes.get(id1),
+                fem.nodes.get(id2),
+                fem.nodes.get(id3)
+            ];
+
+            const geometry = new THREE.BufferGeometry();
+            const vertices = new Float32Array([
+                nodes[0].position.x, nodes[0].position.y, 0,
+                nodes[1].position.x, nodes[1].position.y, 0,
+                nodes[2].position.x, nodes[2].position.y, 0
+            ]);
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshLambertMaterial({
+                color: COLORS.triangle.default,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.userData.type = 'triangle';
+            mesh.userData.triangleId = triangle.id;
+
+            scene.add(mesh);
+            triangleObjects.set(triangle.id, mesh);
+
+            // Add wireframe
+            const wireframe = new THREE.WireframeGeometry(geometry);
+            const wireframeMaterial = new THREE.LineBasicMaterial({
+                color: 0x555555,
+                transparent: true,
+                opacity: 0.3
+            });
+            const wireframeMesh = new THREE.LineSegments(wireframe, wireframeMaterial);
+            mesh.add(wireframeMesh);
+        }
+
+        function createNodeObject(node) {
+            const geometry = new THREE.SphereGeometry(0.3, 8, 6);
+            const material = new THREE.MeshLambertMaterial({
+                color: COLORS.node.default
+            });
+
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(node.position.x, node.position.y, 0.1);
+            sphere.userData.type = 'node';
+            sphere.userData.nodeId = node.id;
+
+            scene.add(sphere);
+            nodeObjects.set(node.id, sphere);
+        }
+
+        function updateNodeVisuals() {
+            for (const [nodeId, object] of nodeObjects) {
+                const node = fem.nodes.get(nodeId);
+                if (!node) continue;
+
+                // Update position
+                object.position.set(node.position.x, node.position.y, 0.1);
+
+                // Update color based on state
+                let color = COLORS.node.default;
+
+                if (selectedNodes.has(nodeId)) {
+                    color = COLORS.node.selected;
+                } else if (node.isFixed) {
+                    color = COLORS.node.fixed;
+                } else if (node.force.x !== 0 || node.force.y !== 0) {
+                    color = COLORS.node.force;
+                }
+
+                object.material.color.setHex(color);
+
+                // Scale based on force magnitude
+                const forceMagnitude = Math.sqrt(node.force.x * node.force.x + node.force.y * node.force.y);
+                const scale = 1 + forceMagnitude / 50000;
+                object.scale.setScalar(Math.min(scale, 3));
+            }
+
+            // Update triangle positions and colors
+            for (const [triangleId, object] of triangleObjects) {
+                const triangle = fem.triangles.get(triangleId);
+                if (!triangle) continue;
+
+                // Update vertex positions
+                const [id1, id2, id3] = triangle.nodeIds;
+                const nodes = [
+                    fem.nodes.get(id1),
+                    fem.nodes.get(id2),
+                    fem.nodes.get(id3)
+                ];
+
+                const positions = object.geometry.attributes.position.array;
+                positions[0] = nodes[0].position.x;
+                positions[1] = nodes[0].position.y;
+                positions[3] = nodes[1].position.x;
+                positions[4] = nodes[1].position.y;
+                positions[6] = nodes[2].position.x;
+                positions[7] = nodes[2].position.y;
+
+                object.geometry.attributes.position.needsUpdate = true;
+                object.geometry.computeVertexNormals();
+
+                // Color based on stress
+                const stressMagnitude = Math.sqrt(
+                    triangle.stress[0] * triangle.stress[0] +
+                    triangle.stress[1] * triangle.stress[1] +
+                    triangle.stress[2] * triangle.stress[2]
+                );
+
+                if (stressMagnitude > 1000) {
+                    const intensity = Math.min(stressMagnitude / 10000, 1);
+                    object.material.color.setRGB(intensity, 0.5 * (1 - intensity), 0);
+                } else {
+                    object.material.color.setHex(COLORS.triangle.default);
+                }
+            }
+        }
+
+        function startSolver() {
+            fem.startSolver();
+            isAnimating = true;
+            updateStatus();
+            solverLoop();
+        }
+
+        function stepSolver() {
+            if (!fem.isRunning) {
+                fem.startSolver();
+            }
+            fem.isPaused = false;
+            fem.solveStep().then(result => {
+                if (result) {
+                    updateVisualization();
+                    updateStatus(result);
+                }
+                fem.isPaused = true;
+            });
+        }
+
+        function pauseSolver() {
+            fem.pauseSolver();
+            updateStatus();
+        }
+
+        function resetSolver() {
+            fem.resetSolver();
+            isAnimating = false;
+            updateVisualization();
+            updateStatus();
+        }
+
+        async function solverLoop() {
+            if (!isAnimating || !fem.isRunning) return;
+
+            const result = await fem.solveStep();
+
+            if (result) {
+                updateVisualization();
+                updateStatus(result);
+
+                if (result.running && !fem.isPaused) {
+                    // Continue solving with animation
+                    requestAnimationFrame(solverLoop);
+                }
+            }
+        }
+
+        function updateStatus(result = null) {
+            const statusText = document.getElementById('statusText');
+            const progressFill = document.getElementById('progressFill');
+            const iterationCount = document.getElementById('iterationCount');
+            const errorValue = document.getElementById('errorValue');
+            const maxDisp = document.getElementById('maxDisp');
+
+            if (result) {
+                iterationCount.textContent = result.iterations;
+                errorValue.textContent = result.error.toExponential(2);
+                maxDisp.textContent = result.maxDisplacement.toFixed(6);
+
+                const progress = Math.min((result.iterations / fem.maxIterations) * 100, 100);
+                progressFill.style.width = progress + '%';
+
+                if (result.converged) {
+                    statusText.textContent = 'Converged!';
+                    statusText.style.color = '#4caf50';
+                } else if (!result.running) {
+                    statusText.textContent = 'Max iterations reached';
+                    statusText.style.color = '#ff9800';
+                } else if (fem.isPaused) {
+                    statusText.textContent = 'Paused';
+                    statusText.style.color = '#2196f3';
+                } else {
+                    statusText.textContent = 'Solving...';
+                    statusText.style.color = '#fff';
+                }
+            } else {
+                if (fem.isRunning && fem.isPaused) {
+                    statusText.textContent = 'Paused';
+                    statusText.style.color = '#2196f3';
+                } else if (!fem.isRunning) {
+                    statusText.textContent = 'Ready';
+                    statusText.style.color = '#fff';
+                    iterationCount.textContent = fem.currentIteration;
+                    errorValue.textContent = fem.currentError === Infinity ? '∞' : fem.currentError.toExponential(2);
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Camera look at center
+            camera.lookAt(0, 0, 0);
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+
+            // Preserve current center position
+            const centerX = (camera.left + camera.right) / 2;
+            const centerY = (camera.top + camera.bottom) / 2;
+
+            const frustumHeight = camera.top - camera.bottom;
+            const frustumWidth = frustumHeight * aspect;
+
+            // Apply the new frustum size while preserving the center
+            camera.left = centerX - frustumWidth / 2;
+            camera.right = centerX + frustumWidth / 2;
+            camera.top = centerY + frustumHeight / 2;
+            camera.bottom = centerY - frustumHeight / 2;
+
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initialize the application
+        init();
+
+        // Update initial slider values
+        updateMaterialProperties();
+        updateSolverParameters();
+    </script>
+</body>
+
+</html>
