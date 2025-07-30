@@ -215,7 +215,7 @@
                 </div>
                 <div class="slider-container">
                     <label>Max Iterations: <span id="maxIterValue" class="value-display">5000</span></label>
-                    <input type="range" id="maxIterations" min="100" max="10000" step="100" value="5000">
+                    <input type="range" id="maxIterations" min="100" max="1000000" step="100" value="10000">
                 </div>
                 <div class="slider-container">
                     <label>Damping: <span id="dampingValue" class="value-display">0.8</span></label>
@@ -252,6 +252,7 @@
             <p><strong>Force Mode:</strong> Click nodes to apply forces</p>
             <p><strong>Restoration Mode:</strong> Click nodes for restoration targets</p>
             <p><strong>Camera:</strong> Mouse to orbit, wheel to zoom</p>
+            <p><strong>Colors:</strong> Blue=normal, Pink=selected, Red=fixed, Purple=restored, Green=forces</p>
         </div>
     </div>
 
@@ -272,9 +273,10 @@
         // Colors
         const COLORS = {
             node: {
-                default: 0x4fc3f7,
+                default: 0xffffff,
                 selected: 0xf093fb,
-                fixed: 0xff5722,
+                fixed: 0xff5722,          // Red for fully fixed nodes
+                restored: 0x9c27b0,       // Purple for restoration target nodes
                 force: 0x4caf50
             },
             triangle: {
@@ -309,13 +311,13 @@
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
             // Lighting
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.99);
             scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(50, 50, 50);
-            directionalLight.castShadow = true;
-            scene.add(directionalLight);
+            // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            // directionalLight.position.set(50, 50, 50);
+            // directionalLight.castShadow = true;
+            // scene.add(directionalLight);
 
             // Simple orbit controls (mouse interaction)
             setupControls();
@@ -441,14 +443,17 @@
             const amplitude = 3;
 
             // Create nodes in a grid with folding
+            const NY = 10
+            const NX = 30
+
             let nodeId = 0;
-            for (let j = 0; j <= 4; j++) {
-                for (let i = 0; i <= 10; i++) {
-                    const x = (i / 10) * width - width / 2;
-                    const baseY = (j / 4) * height - height / 2;
+            for (let j = 0; j <= NY; j++) {
+                for (let i = 0; i <= NX; i++) {
+                    const x = (i / NX) * width - width / 2;
+                    const baseY = (j / NY) * height - height / 2;
 
                     // Add folding - sinusoidal deformation
-                    const foldY = j > 0 ? amplitude * Math.sin((i / 10) * Math.PI) * (j / 4) : 0;
+                    const foldY = j > 0 ? amplitude * Math.sin((i / NX) * Math.PI) * (j / NY) : 0;
                     const y = baseY + foldY - height;
 
                     // console.log(x,y)
@@ -460,12 +465,12 @@
 
             // Create triangular elements
             let triangleId = 0;
-            for (let j = 0; j < 4; j++) {
-                for (let i = 0; i < 10; i++) {
-                    const n1 = j * 11 + i;
-                    const n2 = j * 11 + i + 1;
-                    const n3 = (j + 1) * 11 + i;
-                    const n4 = (j + 1) * 11 + i + 1;
+            for (let j = 0; j < NY; j++) {
+                for (let i = 0; i < NX; i++) {
+                    const n1 = j * (NX+1) + i;
+                    const n2 = j * (NX+1) + i + 1;
+                    const n3 = (j + 1) * (NX+1) + i;
+                    const n4 = (j + 1) * (NX+1) + i + 1;
 
                     // Create two triangles per quad
                     fem.addTriangle(triangleId++, [n1, n2, n3], limestone);
@@ -474,7 +479,7 @@
             }
 
             // Fix bottom nodes
-            for (let i = 0; i <= 10; i++) {
+            for (let i = 0; i <= NX; i++) {
                 fem.setFixedNode(i, true, true);
             }
 
@@ -495,57 +500,72 @@
             const height = 15;
             const amplitude = 4;
 
+            const NY = 20//6
+            const NX = 40//15
+
+            let max = Number.NEGATIVE_INFINITY
+
             let nodeId = 0;
-            for (let j = 0; j <= 6; j++) {
-                for (let i = 0; i <= 15; i++) {
-                    const x = (i / 15) * width - width / 2;
-                    const baseY = (j / 6) * height - height / 2;
+            for (let j = 0; j <= NY; j++) {
+                for (let i = 0; i <= NX; i++) {
+                    const x = (i / NX) * width - width / 2;
+                    const baseY = (j / NY) * height - height / 2;
 
                     // Complex folding with multiple wavelengths
                     let foldY = 0;
                     if (j > 0) {
-                        foldY = amplitude * Math.sin((i / 15) * Math.PI * 2) * (j / 6) * 0.7 +
-                            amplitude * 0.3 * Math.sin((i / 15) * Math.PI * 4) * (j / 6);
+                        foldY = amplitude * Math.sin((i / NX) * Math.PI * 2) * (j / NY) * 0.7 +
+                            amplitude * 0.3 * Math.sin((i / NX) * Math.PI * 4) * (j / NY);
                     }
 
                     // Add fault offset
                     let faultOffset = 0;
-                    if (i > 7 && j < 4) {
-                        faultOffset = -1.5;
-                    }
+                    // if (i > 7 && j < 4) {
+                    //     faultOffset = -1.5;
+                    // }
 
                     const y = baseY + foldY + faultOffset;
+
+                    if (y>max) {
+                        max = y
+                    }
 
                     fem.addNode(nodeId, x, y);
                     nodeId++;
                 }
             }
 
+            // translate
+            fem.getNodes().forEach(node => {
+                node.position.y -= max + 1;
+                node.originalPosition.y = max + 1;
+            });
+
             // Create triangular elements
             let triangleId = 0;
-            for (let j = 0; j < 6; j++) {
-                for (let i = 0; i < 15; i++) {
-                    const n1 = j * 16 + i;
-                    const n2 = j * 16 + i + 1;
-                    const n3 = (j + 1) * 16 + i;
-                    const n4 = (j + 1) * 16 + i + 1;
+            for (let j = 0; j < NY; j++) {
+                for (let i = 0; i < NX; i++) {
+                    const n1 = j * (NX+1) + i;
+                    const n2 = j * (NX+1) + i + 1;
+                    const n3 = (j + 1) * (NX+1) + i;
+                    const n4 = (j + 1) * (NX+1) + i + 1;
 
                     // Skip elements across the fault
-                    if (!(i === 7 && j < 3)) {
+                    // if (!(i === 7 && j < 3)) {
                         fem.addTriangle(triangleId++, [n1, n2, n3], limestone);
                         fem.addTriangle(triangleId++, [n2, n4, n3], limestone);
-                    }
+                    // }
                 }
             }
 
             // Fix bottom and side nodes
-            for (let i = 0; i <= 15; i++) {
+            for (let i = 0; i <= NX; i++) {
                 fem.setFixedNode(i, true, true); // Bottom
             }
-            for (let j = 0; j <= 6; j++) {
-                fem.setFixedNode(j * 16, true, false); // Left side
-                fem.setFixedNode(j * 16 + 15, true, false); // Right side
-            }
+            // for (let j = 0; j <= 6; j++) {
+            //     fem.setFixedNode(j * 16, true, false); // Left side
+            //     fem.setFixedNode(j * 16 + 15, true, false); // Right side
+            // }
 
             updateVisualization();
         }
@@ -664,6 +684,7 @@
             updateNodeVisuals();
         }
 
+        // TODO: optimization for ONE mesh instead of a soup of triangles
         function updateVisualization() {
             // Clear existing objects
             nodeObjects.clear();
@@ -690,6 +711,7 @@
             updateNodeVisuals();
         }
 
+        // TODO: optimization for ONE mesh instead of a soup of triangles
         function createTriangleObject(triangle) {
             const [id1, id2, id3] = triangle.nodeIds;
             const nodes = [
@@ -710,7 +732,7 @@
 
             const material = new THREE.MeshLambertMaterial({
                 color: COLORS.triangle.default,
-                transparent: true,
+                transparent: false,
                 opacity: 0.7,
                 side: THREE.DoubleSide
             });
@@ -725,8 +747,8 @@
             // Add wireframe
             const wireframe = new THREE.WireframeGeometry(geometry);
             const wireframeMaterial = new THREE.LineBasicMaterial({
-                color: 0x555555,
-                transparent: true,
+                color: 0xffffff,
+                transparent: false,
                 opacity: 0.3
             });
             const wireframeMesh = new THREE.LineSegments(wireframe, wireframeMaterial);
@@ -734,7 +756,7 @@
         }
 
         function createNodeObject(node) {
-            const geometry = new THREE.SphereGeometry(0.3, 8, 6);
+            const geometry = new THREE.SphereGeometry(0.1, 8, 6);
             const material = new THREE.MeshLambertMaterial({
                 color: COLORS.node.default
             });
@@ -761,7 +783,11 @@
 
                 if (selectedNodes.has(nodeId)) {
                     color = COLORS.node.selected;
+                } else if (node.fixedY && Math.abs(node.position.y - node.originalPosition.y) > 0.1) {
+                    // Restoration target (Y-fixed but moved from original position)
+                    color = COLORS.node.restored;
                 } else if (node.isFixed) {
+                    // Fully fixed nodes
                     color = COLORS.node.fixed;
                 } else if (node.force.x !== 0 || node.force.y !== 0) {
                     color = COLORS.node.force;
@@ -909,7 +935,7 @@
             requestAnimationFrame(animate);
 
             // Camera look at center
-            camera.lookAt(0, 0, 0);
+            // camera.lookAt(0, 0, 0);
 
             renderer.render(scene, camera);
         }
