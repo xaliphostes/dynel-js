@@ -3,6 +3,9 @@
 ![Geomechanical Restoration Screenshot](media/screenshot.png)
 *Interactive finite element method visualization for geological restoration*
 
+## Live server
+[**Try this link**](https://xaliphostes.github.io/dynel-js/)
+
 ## Overview
 
 This is an interactive 2D finite element method (FEM) application for geomechanical restoration of geological structures. Based on the techniques described by Maerten & Maerten (2006), this tool simulates the physical behavior of rock masses and considers heterogeneous material properties, bedding slip, and mechanical interaction of faults.
