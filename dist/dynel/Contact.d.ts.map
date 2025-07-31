@@ -1,0 +1,1 @@
+{"version":3,"file":"Contact.d.ts","sourceRoot":"","sources":["../../src/dynel/Contact.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAA;AAEnC,MAAM,WAAW,OAAO;IACpB,WAAW,EAAE,MAAM,CAAC;IACpB,aAAa,EAAE,CAAC,MAAM,EAAE,MAAM,CAAC,CAAC;IAChC,MAAM,EAAE,OAAO,CAAC;IAChB,QAAQ,EAAE,MAAM,CAAC;CACpB"}

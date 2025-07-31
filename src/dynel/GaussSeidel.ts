@@ -1,5 +1,4 @@
 import { Model } from "./Model";
-//import { Point2D } from "./Point2D";
 
 export interface SolverResult {
     converged: boolean;
