@@ -1,5 +1,5 @@
 export * from './Contact';
-export * from './Node';
+export * from './GNode';
 export * from './Triangle';
 export * from './Point2D';
 export * from './GaussSeidel';

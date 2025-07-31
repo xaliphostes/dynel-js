@@ -7,9 +7,16 @@ let selectedNodes = new Set();
 let nodeObjects = new Map();
 let triangleObjects = new Map();
 let wireframeObjects = new Map();
+let displacementVectors = new Map(); // New: store displacement vector objects
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let isAnimating = false;
+
+// Mouse interaction state for node dragging
+let isDraggingNode = false;
+let draggedNodeId = null;
+let dragStartMouse = new THREE.Vector2();
+let dragStartNodePos = new THREE.Vector2();
 
 // Colors
 const COLORS = {
@@ -23,7 +30,8 @@ const COLORS = {
     triangle: {
         default: 0x263238,
         stressed: 0xff9800
-    }
+    },
+    displacement: 0x00ff00  // Green for displacement vectors
 };
 
 function init() {
@@ -35,7 +43,6 @@ function init() {
     const height = window.innerHeight;
 
     // Camera setup
-    // camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     const aspect = width / height;
     const frustumSize = 50;
     camera = new THREE.OrthographicCamera(frustumSize * aspect / - 2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / - 2, 0.1, 100);
@@ -54,11 +61,6 @@ function init() {
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.99);
     scene.add(ambientLight);
-
-    // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    // directionalLight.position.set(50, 50, 50);
-    // directionalLight.castShadow = true;
-    // scene.add(directionalLight);
 
     // Simple orbit controls (mouse interaction)
     setupControls();
@@ -82,39 +84,49 @@ function setupControls() {
             isMouseDown = true;
             mouseX = event.clientX;
             mouseY = event.clientY;
+            
+            // Handle node dragging for move mode
+            if (currentMode === 'move') {
+                handleNodeDragStart(event);
+            }
         }
     });
 
     document.addEventListener('mousemove', (event) => {
-        if (isMouseDown && event.target.id === 'canvas') {
-            const deltaX = event.clientX - mouseX;
-            const deltaY = event.clientY - mouseY;
+        if (event.target.id === 'canvas') {
+            if (isDraggingNode && currentMode === 'move') {
+                handleNodeDrag(event);
+            } else if (isMouseDown && !isDraggingNode) {
+                // Camera panning
+                const deltaX = event.clientX - mouseX;
+                const deltaY = event.clientY - mouseY;
 
-            const scaleX = (camera.right - camera.left) / window.innerWidth;
-            const scaleY = (camera.top - camera.bottom) / window.innerHeight;
+                const scaleX = (camera.right - camera.left) / window.innerWidth;
+                const scaleY = (camera.top - camera.bottom) / window.innerHeight;
 
-            camera.left -= deltaX * scaleX;
-            camera.right -= deltaX * scaleX;
-            camera.top += deltaY * scaleY;
-            camera.bottom += deltaY * scaleY;
+                camera.left -= deltaX * scaleX;
+                camera.right -= deltaX * scaleX;
+                camera.top += deltaY * scaleY;
+                camera.bottom += deltaY * scaleY;
 
-            camera.updateProjectionMatrix();
+                camera.updateProjectionMatrix();
 
-            mouseX = event.clientX;
-            mouseY = event.clientY;
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            }
         }
     });
 
-    document.addEventListener('mouseup', () => {
+    document.addEventListener('mouseup', (event) => {
+        if (isDraggingNode && currentMode === 'move') {
+            handleNodeDragEnd(event);
+        }
         isMouseDown = false;
     });
 
     document.addEventListener('wheel', (event) => {
         if (event.target.id === 'canvas') {
-            // camera.position.z += event.deltaY * 0.01;
-            // camera.position.z = Math.max(10, Math.min(100, camera.position.z));
             const zoomFactor = 1 + (event.deltaY * 0.001);
-            const aspect = window.innerWidth / window.innerHeight;
 
             camera.left *= zoomFactor;
             camera.right *= zoomFactor;
@@ -143,6 +155,12 @@ function setupEventListeners() {
     document.getElementById('stepSolver').addEventListener('click', stepSolver);
     document.getElementById('pauseSolver').addEventListener('click', pauseSolver);
     document.getElementById('resetSolver').addEventListener('click', resetSolver);
+
+    // Display checkboxes - Updated to include displacement vectors
+    document.getElementById('showNodes').addEventListener('change', updateDisplayVisibility);
+    document.getElementById('showWireframe').addEventListener('change', updateDisplayVisibility);
+    document.getElementById('showTriangles').addEventListener('change', updateDisplayVisibility);
+    document.getElementById('showDisplacements').addEventListener('change', updateDisplayVisibility); // New
 
     // Sliders
     document.getElementById('youngModulus').addEventListener('input', updateMaterialProperties);
@@ -188,48 +206,11 @@ function setupCollapsibleSections() {
     });
 }
 
-function setupEventListeners() {
-    // Mode buttons
-    document.getElementById('modeSelect').addEventListener('change', (e) => setMode(e.target.value));
-
-    // Collapsible sections
-    setupCollapsibleSections();
-
-    // Geometry buttons
-    document.getElementById('createSimple').addEventListener('click', createSimpleFold);
-    document.getElementById('createComplex').addEventListener('click', createComplexFold);
-    document.getElementById('clearMesh').addEventListener('click', clearMesh);
-
-    // Solver buttons
-    document.getElementById('startSolver').addEventListener('click', startSolver);
-    document.getElementById('stepSolver').addEventListener('click', stepSolver);
-    document.getElementById('pauseSolver').addEventListener('click', pauseSolver);
-    document.getElementById('resetSolver').addEventListener('click', resetSolver);
-
-    // Sliders
-    document.getElementById('youngModulus').addEventListener('input', updateMaterialProperties);
-    document.getElementById('poissonRatio').addEventListener('input', updateMaterialProperties);
-    document.getElementById('density').addEventListener('input', updateMaterialProperties);
-    document.getElementById('convergence').addEventListener('input', updateSolverParameters);
-    document.getElementById('maxIterations').addEventListener('input', updateSolverParameters);
-    document.getElementById('damping').addEventListener('input', updateSolverParameters);
-
-    // Canvas click
-    document.getElementById('canvas').addEventListener('click', onCanvasClick);
-
-    // Display controls
-    document.getElementById('showNodes').addEventListener('change', updateDisplayVisibility);
-    document.getElementById('showWireframe').addEventListener('change', updateDisplayVisibility);
-    document.getElementById('showTriangles').addEventListener('change', updateDisplayVisibility);
-
-    // Window resize
-    window.addEventListener('resize', onWindowResize);
-}
-
 function updateDisplayVisibility() {
     const showNodes = document.getElementById('showNodes').checked;
     const showWireframe = document.getElementById('showWireframe').checked;
     const showTriangles = document.getElementById('showTriangles').checked;
+    const showDisplacements = document.getElementById('showDisplacements').checked; // New
 
     // Update node visibility
     for (const [nodeId, object] of nodeObjects) {
@@ -245,15 +226,46 @@ function updateDisplayVisibility() {
     for (const [triangleId, object] of wireframeObjects) {
         object.visible = showWireframe;
     }
+
+    // New: Update displacement vector visibility
+    for (const [nodeId, object] of displacementVectors) {
+        object.visible = showDisplacements;
+    }
 }
 
 function setMode(mode) {
     currentMode = mode;
-    //document.querySelectorAll('.mode-button').forEach(btn => btn.classList.remove('active'));
-    //document.getElementById(mode + 'Mode').classList.add('active');
 
     // Clear selection when changing modes
     selectedNodes.clear();
+    
+    // Reset any dragging state
+    isDraggingNode = false;
+    draggedNodeId = null;
+    document.body.style.cursor = 'default';
+    
+    // Update cursor style based on mode
+    const canvas = document.getElementById('canvas');
+    switch (mode) {
+        case 'move':
+            canvas.style.cursor = 'grab';
+            break;
+        case 'select':
+            canvas.style.cursor = 'pointer';
+            break;
+        case 'fixity':
+            canvas.style.cursor = 'crosshair';
+            break;
+        case 'force':
+            canvas.style.cursor = 'crosshair';
+            break;
+        case 'restore':
+            canvas.style.cursor = 'crosshair';
+            break;
+        default:
+            canvas.style.cursor = 'default';
+    }
+    
     updateNodeVisuals();
 }
 
@@ -284,8 +296,6 @@ function createSimpleFold() {
             // Add folding - sinusoidal deformation
             const foldY = j > 0 ? amplitude * Math.sin((i / NX) * Math.PI) * (j / NY) : 0;
             const y = baseY + foldY - height;
-
-            // console.log(x,y)
 
             model.addNode(nodeId, x, y);
             nodeId++;
@@ -329,8 +339,8 @@ function createComplexFold() {
     const height = 15;
     const amplitude = 4;
 
-    const NY = 20//6
-    const NX = 40//15
+    const NY = 20
+    const NX = 40
 
     let max = Number.NEGATIVE_INFINITY
 
@@ -347,13 +357,7 @@ function createComplexFold() {
                     amplitude * 0.3 * Math.sin((i / NX) * Math.PI * 4) * (j / NY);
             }
 
-            // Add fault offset
-            let faultOffset = 0;
-            // if (i > 7 && j < 4) {
-            //     faultOffset = -1.5;
-            // }
-
-            const y = baseY + foldY + faultOffset;
+            const y = baseY + foldY;
 
             if (y > max) {
                 max = y
@@ -379,11 +383,8 @@ function createComplexFold() {
             const n3 = (j + 1) * (NX + 1) + i;
             const n4 = (j + 1) * (NX + 1) + i + 1;
 
-            // Skip elements across the fault
-            // if (!(i === 7 && j < 3)) {
             model.addTriangle(triangleId++, [n1, n2, n3], limestone);
             model.addTriangle(triangleId++, [n2, n4, n3], limestone);
-            // }
         }
     }
 
@@ -391,10 +392,6 @@ function createComplexFold() {
     for (let i = 0; i <= NX; i++) {
         model.setFixedNode(i, true, true); // Bottom
     }
-    // for (let j = 0; j <= 6; j++) {
-    //     model.setFixedNode(j * 16, true, false); // Left side
-    //     model.setFixedNode(j * 16 + 15, true, false); // Right side
-    // }
 
     updateVisualization();
 }
@@ -406,12 +403,14 @@ function clearMesh() {
     // Clear Three.js objects
     nodeObjects.clear();
     triangleObjects.clear();
-    wireframeObjects.clear(); // Add this line
+    wireframeObjects.clear();
+    displacementVectors.clear(); // New: clear displacement vectors
 
     // Remove all mesh objects from scene
     const objectsToRemove = [];
     scene.traverse((child) => {
-        if (child.userData.type === 'node' || child.userData.type === 'triangle' || child.userData.type === 'wireframe') {
+        if (child.userData.type === 'node' || child.userData.type === 'triangle' || 
+            child.userData.type === 'wireframe' || child.userData.type === 'displacement') { // Updated
             objectsToRemove.push(child);
         }
     });
@@ -456,6 +455,11 @@ function updateSolverParameters() {
 }
 
 function onCanvasClick(event) {
+    // Skip click handling if we just finished dragging a node
+    if (currentMode === 'move' && isDraggingNode) {
+        return;
+    }
+
     // Calculate mouse position in normalized device coordinates
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -509,21 +513,167 @@ function handleNodeClick(nodeId) {
             model.setFixedNode(nodeId, false, true);
             node.position.y = targetY;
             break;
+
+        case 'move':
+            // Node moving is handled by drag events, not clicks
+            break;
     }
 
     updateNodeVisuals();
 }
 
-// TODO: optimization for ONE mesh instead of a soup of triangles
+// New function to create displacement vector visualization
+function createDisplacementVector(node) {
+    const displacement = node.displacement;
+    const magnitude = Math.sqrt(displacement.x * displacement.x + displacement.y * displacement.y);
+    
+    // Only create vector if displacement is significant
+    if (magnitude < 0.01) {
+        return;
+    }
+
+    // Scale factor for visualization (adjust as needed)
+    const scaleFactor = 1.0;
+    
+    // Create arrow geometry
+    const direction = new THREE.Vector3(displacement.x, displacement.y, 0).normalize();
+    const origin = new THREE.Vector3(node.originalPosition.x, node.originalPosition.y, 0.1);
+    const length = magnitude * scaleFactor;
+    
+    const arrowHelper = new THREE.ArrowHelper(direction, origin, length, COLORS.displacement, length * 0.2, length * 0.1);
+    arrowHelper.userData.type = 'displacement';
+    arrowHelper.userData.nodeId = node.id;
+    
+    scene.add(arrowHelper);
+    displacementVectors.set(node.id, arrowHelper);
+}
+
+// Node dragging functions for move mode
+function handleNodeDragStart(event) {
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Update raycaster
+    raycaster.setFromCamera(mouse, camera);
+
+    // Find intersected nodes
+    const nodeObjectsArray = Array.from(nodeObjects.values());
+    const intersects = raycaster.intersectObjects(nodeObjectsArray);
+
+    if (intersects.length > 0) {
+        const clickedObject = intersects[0].object;
+        const nodeId = clickedObject.userData.nodeId;
+        const node = model.getNode(nodeId);
+
+        if (node && !node.isFixed) {
+            isDraggingNode = true;
+            draggedNodeId = nodeId;
+            
+            // Store initial mouse position
+            dragStartMouse.set(mouse.x, mouse.y);
+            
+            // Store initial node position
+            dragStartNodePos.set(node.position.x, node.position.y);
+            
+            // Change cursor to indicate dragging
+            document.body.style.cursor = 'grabbing';
+            
+            // Prevent camera panning while dragging
+            event.preventDefault();
+        }
+    }
+}
+
+function handleNodeDrag(event) {
+    if (!isDraggingNode || !draggedNodeId) return;
+
+    // Calculate current mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    const currentMouse = new THREE.Vector2();
+    currentMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    currentMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Calculate mouse movement in normalized coordinates
+    const mouseDelta = new THREE.Vector2();
+    mouseDelta.subVectors(currentMouse, dragStartMouse);
+
+    // Convert mouse movement to world coordinates
+    const worldDelta = new THREE.Vector2();
+    worldDelta.x = mouseDelta.x * (camera.right - camera.left) / 2;
+    worldDelta.y = mouseDelta.y * (camera.top - camera.bottom) / 2;
+
+    // Update node position
+    const node = model.getNode(draggedNodeId);
+    if (node) {
+        const newX = dragStartNodePos.x + worldDelta.x;
+        const newY = dragStartNodePos.y + worldDelta.y;
+        
+        // Only move if not fixed in that direction
+        if (!node.fixedX) {
+            node.position.x = newX;
+            // Update displacement relative to original position
+            node.displacement.x = node.position.x - node.originalPosition.x;
+        }
+        if (!node.fixedY) {
+            node.position.y = newY;
+            // Update displacement relative to original position
+            node.displacement.y = node.position.y - node.originalPosition.y;
+        }
+        
+        // Update visualization
+        updateNodeVisuals();
+    }
+}
+
+function handleNodeDragEnd(event) {
+    if (isDraggingNode) {
+        isDraggingNode = false;
+        draggedNodeId = null;
+        
+        // Reset cursor
+        document.body.style.cursor = 'default';
+        
+        // Log the final position for debugging
+        const node = model.getNode(draggedNodeId);
+        if (node) {
+            console.log(`Node ${draggedNodeId} moved to (${node.position.x.toFixed(2)}, ${node.position.y.toFixed(2)})`);
+            console.log(`Displacement: (${node.displacement.x.toFixed(2)}, ${node.displacement.y.toFixed(2)})`);
+        }
+    }
+}
+
+// Updated function to update displacement vectors
+function updateDisplacementVectors() {
+    // Clear existing displacement vectors
+    for (const [nodeId, vector] of displacementVectors) {
+        scene.remove(vector);
+    }
+    displacementVectors.clear();
+
+    // Create new displacement vectors for all nodes
+    for (const node of model.getNodes()) {
+        createDisplacementVector(node);
+    }
+}
+
 function updateVisualization() {
     // Clear existing objects
     nodeObjects.clear();
     triangleObjects.clear();
-    wireframeObjects.clear(); // Add this line
+    wireframeObjects.clear();
+    
+    // Clear displacement vectors
+    for (const [nodeId, vector] of displacementVectors) {
+        scene.remove(vector);
+    }
+    displacementVectors.clear();
 
     const objectsToRemove = [];
     scene.traverse((child) => {
-        if (child.userData.type === 'node' || child.userData.type === 'triangle' || child.userData.type === 'wireframe') {
+        if (child.userData.type === 'node' || child.userData.type === 'triangle' || 
+            child.userData.type === 'wireframe' || child.userData.type === 'displacement') {
             objectsToRemove.push(child);
         }
     });
@@ -539,13 +689,15 @@ function updateVisualization() {
         createNodeObject(node);
     }
 
+    // Create displacement vectors
+    updateDisplacementVectors();
+
     updateNodeVisuals();
-    updateDisplayVisibility(); // Add this line
+    updateDisplayVisibility();
 }
 
-// TODO: optimization for ONE mesh instead of a soup of triangles
 function createTriangleObject(triangle) {
-    const [id1, id2, id3] = triangle.nodeIds;
+    const [id1, id2, id3] = triangle.nodes.map( node => node.id);
     const nodes = [
         model.nodes.get(id1),
         model.nodes.get(id2),
@@ -620,10 +772,8 @@ function updateNodeVisuals() {
         if (selectedNodes.has(nodeId)) {
             color = COLORS.node.selected;
         } else if (node.fixedY && Math.abs(node.position.y - node.originalPosition.y) > 0.1) {
-            // Restoration target (Y-fixed but moved from original position)
             color = COLORS.node.restored;
         } else if (node.isFixed) {
-            // Fully fixed nodes
             color = COLORS.node.fixed;
         } else if (node.force.x !== 0 || node.force.y !== 0) {
             color = COLORS.node.force;
@@ -643,7 +793,7 @@ function updateNodeVisuals() {
         if (!triangle) continue;
 
         // Update vertex positions
-        const [id1, id2, id3] = triangle.nodeIds;
+        const [id1, id2, id3] = triangle.nodes.map(node => node.id);
         const nodes = [
             model.nodes.get(id1),
             model.nodes.get(id2),
@@ -681,7 +831,7 @@ function updateNodeVisuals() {
         const triangle = model.triangles.get(triangleId);
         if (!triangle) continue;
 
-        const [id1, id2, id3] = triangle.nodeIds;
+        const [id1, id2, id3] = triangle.nodeIds()
         const nodes = [
             model.nodes.get(id1),
             model.nodes.get(id2),
@@ -701,6 +851,9 @@ function updateNodeVisuals() {
         wireframeObject.geometry.dispose();
         wireframeObject.geometry = wireframe;
     }
+
+    // Update displacement vectors
+    updateDisplacementVectors();
 }
 
 function startSolver() {
@@ -795,10 +948,6 @@ function updateStatus(result = null) {
 
 function animate() {
     requestAnimationFrame(animate);
-
-    // Camera look at center
-    // camera.lookAt(0, 0, 0);
-
     renderer.render(scene, camera);
 }
 

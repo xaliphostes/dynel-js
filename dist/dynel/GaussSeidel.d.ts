@@ -41,11 +41,11 @@ export declare class GaussSeidel {
      */
     solve(model: Model, updateCallback: () => void, updateStatus: (result: SolverResult) => void, animationSpeed?: number): Promise<void>;
     /**
-     * Perform one Gauss-Seidel iteration.
+     * Perform **one** Gauss-Seidel iteration.
      * This method updates the positions of nodes based on the forces acting on them,
      * using the Gauss-Seidel method to solve the linear system of equations.
      */
-    private gaussSeidelIteration;
+    private iteration;
     private convergenceThreshold;
     private maxIterations;
     private damping;

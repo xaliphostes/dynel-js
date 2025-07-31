@@ -2,8 +2,8 @@ import { GaussSeidel } from "./GaussSeidel";
 import { Model } from "./Model";
 
 /**
-     * Restore the geological structure by flattening the top surface to a specified Y level.
-     */
+ * Restore the geological structure by flattening the top surface to a specified Y level.
+ */
 export function restore(model: Model, solver: GaussSeidel, targetNodes: number[], targetY: number): void {
     console.log('Starting geological restoration...');
 

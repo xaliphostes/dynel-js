@@ -63,7 +63,8 @@ export class GaussSeidel {
     async step(model: Model): Promise<SolverResult | null> {
         if (!this.isRunning || this.isPaused) return null;
 
-        const error = this.gaussSeidelIteration(model);
+        const error = this.iteration(model);
+
         this.currentIteration++;
         this.currentError = error;
 
@@ -147,58 +148,29 @@ export class GaussSeidel {
     }
 
     /**
-     * Perform one Gauss-Seidel iteration.
+     * Perform **one** Gauss-Seidel iteration.
      * This method updates the positions of nodes based on the forces acting on them,
      * using the Gauss-Seidel method to solve the linear system of equations.
      */
-    private gaussSeidelIteration(model: Model): number {
+    private iteration(model: Model): number {
         let maxDisplacement = 0;
 
         // Process each node
         for (const node of model.getNodes()) {
-            if (node.isFixed) continue;
+            const displ = node.nodalDisplacement()
 
-            // Compute total force on node from connected elements
-            let totalForce = { x: node.force.x, y: node.force.y };
-
-            for (const triangle of model.getTriangles()) {
-                if (triangle.nodeIds.includes(node.id)) {
-                    const elementForces = model.computeNodalForces(triangle);
-                    const nodeForce = elementForces.get(node.id);
-                    if (nodeForce) {
-                        totalForce.x += nodeForce.x;
-                        totalForce.y += nodeForce.y;
-                    }
-                }
-            }
-
-            // Get nodal stiffness matrix
-            const K = model.computeNodalStiffness(node.id);
-
-            // Solve for displacement increment: K * Δu = F
-            const det = K[0][0] * K[1][1] - K[0][1] * K[1][0];
-            if (Math.abs(det) > 1e-12) {
-                const invK = [
-                    [K[1][1] / det, -K[0][1] / det],
-                    [-K[1][0] / det, K[0][0] / det]
-                ];
-
-                const deltaU = {
-                    x: invK[0][0] * totalForce.x + invK[0][1] * totalForce.y,
-                    y: invK[1][0] * totalForce.x + invK[1][1] * totalForce.y
-                };
-
-                // Apply damping and boundary conditions
+            // displ is undef if node is fixed or node compliance is singular
+            if (displ) {
                 if (!node.fixedX) {
-                    node.position.x += this.damping * deltaU.x;
-                    node.displacement.x += this.damping * deltaU.x;
-                    maxDisplacement = Math.max(maxDisplacement, Math.abs(deltaU.x));
+                    node.position.x += this.damping * displ.x;
+                    node.displacement.x += this.damping * displ.x;
+                    maxDisplacement = Math.max(maxDisplacement, Math.abs(displ.x));
                 }
 
                 if (!node.fixedY) {
-                    node.position.y += this.damping * deltaU.y;
-                    node.displacement.y += this.damping * deltaU.y;
-                    maxDisplacement = Math.max(maxDisplacement, Math.abs(deltaU.y));
+                    node.position.y += this.damping * displ.y;
+                    node.displacement.y += this.damping * displ.y;
+                    maxDisplacement = Math.max(maxDisplacement, Math.abs(displ.y));
                 }
             }
         }
@@ -206,8 +178,8 @@ export class GaussSeidel {
         return maxDisplacement;
     }
 
-    private convergenceThreshold: number = 1e-6;
-    private maxIterations: number = 10000;
+    private convergenceThreshold: number = 1e-7;
+    private maxIterations: number = 50000;
     private damping: number = 0.8;
 
     private isRunning = false;
