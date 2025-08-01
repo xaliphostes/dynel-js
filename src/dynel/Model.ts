@@ -1,7 +1,6 @@
 import { Material } from "./Material";
 import { GNode } from "./GNode"
 import { Triangle } from "./Triangle"
-import { Point2D } from "./Point2D"
 import { Contact } from "./Contact"
 
 export class Model {
