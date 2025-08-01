@@ -4,9 +4,10 @@ export declare class GNode {
     constructor(id: number, position: Point2D, isFixed?: boolean);
     addTriangle(triangle: Triangle): void;
     get triangles(): Triangle[];
-    stiffness(): number[][];
+    initialize(): void;
     nodalForce(): Point2D;
     nodalDisplacement(): Point2D | undefined;
+    private computeStiffness;
     id: number;
     position: Point2D;
     originalPosition: Point2D;
@@ -17,5 +18,8 @@ export declare class GNode {
     fixedY: boolean;
     mass: number;
     private triangles_;
+    private K_;
+    private iK_;
+    private isSingular;
 }
 //# sourceMappingURL=GNode.d.ts.map

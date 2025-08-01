@@ -1,5 +1,5 @@
 import { Triangle } from "./Triangle";
-import { Point2D } from "./Point2D"
+import { isNull, Point2D } from "./Point2D"
 
 export class GNode {
 
@@ -23,21 +23,22 @@ export class GNode {
         return this.triangles_;
     }
 
-    // TODO: precompute the striffness K and k^{-1}
-    stiffness(): number[][] {
-        const stiff = [[0, 0], [0, 0]];
+    initialize() {
+        this.K_ = this.computeStiffness()
+        const K = this.K_
 
-        this.triangles.forEach(triangle => {
-            const elementK = triangle.stiffness();
-            // Extract nodal contribution (2x2 submatrix)
-            const startIdx = this.id * 2;
-            stiff[0][0] += elementK[startIdx][startIdx];
-            stiff[0][1] += elementK[startIdx][startIdx + 1];
-            stiff[1][0] += elementK[startIdx + 1][startIdx];
-            stiff[1][1] += elementK[startIdx + 1][startIdx + 1];
-        })
+        const det = K[0][0] * K[1][1] - K[0][1] * K[1][0];
 
-        return stiff;
+        if (Math.abs(det) > 1e-12) {
+            this.iK_ = [
+                [K[1][1] / det, -K[0][1] / det],
+                [-K[1][0] / det, K[0][0] / det]
+            ];
+            this.isSingular = false
+        }
+        else {
+            this.isSingular = true
+        }
     }
 
     nodalForce(): Point2D {
@@ -54,36 +55,40 @@ export class GNode {
     }
 
     nodalDisplacement(): Point2D | undefined {
-        if (this.isFixed) {
+        if (this.isFixed || this.isSingular) {
             return undefined
         }
 
         // Compute total force on node from connected elements
         const totalForce = this.nodalForce()
-
-        // Get nodal stiffness matrix
-        const K = this.stiffness()
-
-        // Solve for displacement increment: K * Δu = F
-        const det = K[0][0] * K[1][1] - K[0][1] * K[1][0];
-
-        if (Math.abs(det) > 1e-12) {
-            const invK = [
-                [K[1][1] / det, -K[0][1] / det],
-                [-K[1][0] / det, K[0][0] / det]
-            ];
-
-            return {
-                x: invK[0][0] * totalForce.x + invK[0][1] * totalForce.y,
-                y: invK[1][0] * totalForce.x + invK[1][1] * totalForce.y
-            }
-        }
-        else {
+        if (isNull(totalForce)) {
             return undefined
+        }
+
+        return {
+            x: this.iK_[0][0] * totalForce.x + this.iK_[0][1] * totalForce.y,
+            y: this.iK_[1][0] * totalForce.x + this.iK_[1][1] * totalForce.y
         }
     }
 
     // --------------------------------------------------
+
+    // TODO: precompute the striffness K and k^{-1}
+    private computeStiffness(): number[][] {
+        const stiff = [[0, 0], [0, 0]];
+
+        this.triangles.forEach(triangle => {
+            const elementK = triangle.stiffness;
+            // Extract nodal contribution (2x2 submatrix)
+            const startIdx = this.id * 2;
+            stiff[0][0] += elementK[startIdx][startIdx];
+            stiff[0][1] += elementK[startIdx][startIdx + 1];
+            stiff[1][0] += elementK[startIdx + 1][startIdx];
+            stiff[1][1] += elementK[startIdx + 1][startIdx + 1];
+        })
+
+        return stiff;
+    }
 
     id: number = -1;
     position: Point2D = { x: 0, y: 0 };
@@ -93,6 +98,9 @@ export class GNode {
     isFixed: boolean = false;
     fixedX: boolean = false;
     fixedY: boolean = false;
-    mass: number = 0;
+    mass: number = 1;
     private triangles_: Triangle[] = []; // List of triangles this node belongs to
+    private K_: number[][] = []
+    private iK_: number[][] = []
+    private isSingular = false
 }

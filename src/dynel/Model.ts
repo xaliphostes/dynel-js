@@ -4,13 +4,50 @@ import { Triangle } from "./Triangle"
 import { Contact } from "./Contact"
 
 export class Model {
+    private beginC_ = false
+    private isNode_ = false
+    private isTriangle_ = false
+
+    beginConstruction() {
+        if (this.beginC_) {
+            throw "Already in construction mode"
+        }
+        this.beginC_ = true
+        this.isNode_ = false
+        this.isTriangle_ = false
+    }
+
+    beginNodes() {
+        if (!this.beginC_) throw "You must call beginConstruction first"
+        this.isNode_ = true
+    }
+
     // Add node to the mesh
     addNode(id: number, x: number, y: number, isFixed: boolean = false): void {
+        if (!this.beginC_) {
+            throw "You must call beginConstruction before adding nodes"
+        }
+        if (!this.isNode_) {
+            throw "you must call beginNodes first"
+        }
         this.nodes.set(id, new GNode(id, { x, y }, isFixed));
+    }
+
+    endNodes() {
+        if (!this.isNode_) throw "You must call beginNode first and add the nodes"
+        this.isNode_ = false
+    }
+
+    beginTriangles() {
+        if (this.isNode_) throw "You must call endNodes"
+        this.isTriangle_ = true
     }
 
     // Add triangle element
     addTriangle(id: number, nodeIds: [number, number, number], materialProps: Material): void {
+        if (!this.isTriangle_) {
+            throw "You must call beginTraingles before adding triangles"
+        }
         const n0 = this.nodes.get(nodeIds[0])
         const n1 = this.nodes.get(nodeIds[1])
         const n2 = this.nodes.get(nodeIds[2])
@@ -20,6 +57,27 @@ export class Model {
         }
 
         this.triangles.set(id, new Triangle(id, n0, n1, n2, materialProps));
+    }
+
+    endTriangles() {
+        if (!this.isTriangle_) throw "You must call beginTriangles first and add the triangles"
+        this.isTriangle_ = false
+    }
+
+    endConstruction() {
+        if (!this.beginC_) {
+            throw "You must begin a construction before calling endConstruction"
+        }
+        if (this.isTriangle_) {
+            throw "You must call endTriangles"
+        }
+        this.beginC_ = false
+        this.isNode_ = false
+        this.isTriangle_ = false
+
+        // Init triangles and nodes if necessary
+        this.triangles.forEach(triangle => triangle.initialize())
+        this.nodes.forEach(node => node.initialize())
     }
 
     // Set boundary conditions

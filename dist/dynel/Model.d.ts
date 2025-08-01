@@ -2,8 +2,17 @@ import { Material } from "./Material";
 import { GNode } from "./GNode";
 import { Triangle } from "./Triangle";
 export declare class Model {
+    private beginC_;
+    private isNode_;
+    private isTriangle_;
+    beginConstruction(): void;
+    beginNodes(): void;
     addNode(id: number, x: number, y: number, isFixed?: boolean): void;
+    endNodes(): void;
+    beginTriangles(): void;
     addTriangle(id: number, nodeIds: [number, number, number], materialProps: Material): void;
+    endTriangles(): void;
+    endConstruction(): void;
     setFixedNode(nodeId: number, fixedX?: boolean, fixedY?: boolean): void;
     applyForce(nodeId: number, fx: number, fy: number): void;
     getNodes(): GNode[];
