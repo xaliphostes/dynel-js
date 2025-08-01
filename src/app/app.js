@@ -84,7 +84,7 @@ function setupControls() {
             isMouseDown = true;
             mouseX = event.clientX;
             mouseY = event.clientY;
-            
+
             // Handle node dragging for move mode
             if (currentMode === 'move') {
                 handleNodeDragStart(event);
@@ -238,12 +238,12 @@ function setMode(mode) {
 
     // Clear selection when changing modes
     selectedNodes.clear();
-    
+
     // Reset any dragging state
     isDraggingNode = false;
     draggedNodeId = null;
     document.body.style.cursor = 'default';
-    
+
     // Update cursor style based on mode
     const canvas = document.getElementById('canvas');
     switch (mode) {
@@ -265,18 +265,18 @@ function setMode(mode) {
         default:
             canvas.style.cursor = 'default';
     }
-    
+
     updateNodeVisuals();
 }
 
 function createSimpleFold() {
     clearMesh();
 
-    const limestone = {
-        youngModulus: parseFloat(document.getElementById('youngModulus').value) * 1e9,
-        poissonRatio: parseFloat(document.getElementById('poissonRatio').value),
-        density: parseFloat(document.getElementById('density').value)
-    };
+    const limestone = new dynel.Material(
+        parseFloat(document.getElementById('youngModulus').value) * 1e9,
+        parseFloat(document.getElementById('poissonRatio').value),
+        parseFloat(document.getElementById('density').value)
+    )
 
     // Create a simple folded geometry (anticline)
     const width = 20;
@@ -287,35 +287,45 @@ function createSimpleFold() {
     const NY = 10
     const NX = 30
 
-    let nodeId = 0;
-    for (let j = 0; j <= NY; j++) {
-        for (let i = 0; i <= NX; i++) {
-            const x = (i / NX) * width - width / 2;
-            const baseY = (j / NY) * height - height / 2;
+    model.beginConstruction(); {
+        model.beginNodes(); {
 
-            // Add folding - sinusoidal deformation
-            const foldY = j > 0 ? amplitude * Math.sin((i / NX) * Math.PI) * (j / NY) : 0;
-            const y = baseY + foldY - height;
 
-            model.addNode(nodeId, x, y);
-            nodeId++;
+            let nodeId = 0;
+            for (let j = 0; j <= NY; j++) {
+                for (let i = 0; i <= NX; i++) {
+                    const x = (i / NX) * width - width / 2;
+                    const baseY = (j / NY) * height - height / 2;
+
+                    // Add folding - sinusoidal deformation
+                    const foldY = j > 0 ? amplitude * Math.sin((i / NX) * Math.PI) * (j / NY) : 0;
+                    const y = baseY + foldY - height;
+
+                    model.addNode(nodeId, x, y);
+                    nodeId++;
+                }
+            }
         }
-    }
+        model.endNodes()
+        model.beginTriangles(); {
 
-    // Create triangular elements
-    let triangleId = 0;
-    for (let j = 0; j < NY; j++) {
-        for (let i = 0; i < NX; i++) {
-            const n1 = j * (NX + 1) + i;
-            const n2 = j * (NX + 1) + i + 1;
-            const n3 = (j + 1) * (NX + 1) + i;
-            const n4 = (j + 1) * (NX + 1) + i + 1;
-
-            // Create two triangles per quad
-            model.addTriangle(triangleId++, [n1, n2, n3], limestone);
-            model.addTriangle(triangleId++, [n2, n4, n3], limestone);
+            // Create triangular elements
+            let triangleId = 0;
+            for (let j = 0; j < NY; j++) {
+                for (let i = 0; i < NX; i++) {
+                    const n1 = j * (NX + 1) + i;
+                    const n2 = j * (NX + 1) + i + 1;
+                    const n3 = (j + 1) * (NX + 1) + i;
+                    const n4 = (j + 1) * (NX + 1) + i + 1;
+                    // Create two triangles per quad
+                    model.addTriangle(triangleId++, [n1, n2, n3], limestone);
+                    model.addTriangle(triangleId++, [n2, n4, n3], limestone);
+                }
+            }
         }
+        model.endTriangles()
     }
+    model.endConstruction()
 
     // Fix bottom nodes
     for (let i = 0; i <= NX; i++) {
@@ -328,11 +338,11 @@ function createSimpleFold() {
 function createComplexFold() {
     clearMesh();
 
-    const limestone = {
-        youngModulus: parseFloat(document.getElementById('youngModulus').value) * 1e9,
-        poissonRatio: parseFloat(document.getElementById('poissonRatio').value),
-        density: parseFloat(document.getElementById('density').value)
-    };
+    const limestone = new dynel.Material(
+        parseFloat(document.getElementById('youngModulus').value) * 1e9,
+        parseFloat(document.getElementById('poissonRatio').value),
+        parseFloat(document.getElementById('density').value)
+    )
 
     // Create a more complex folded geometry with fault
     const width = 30;
@@ -344,54 +354,64 @@ function createComplexFold() {
 
     let max = Number.NEGATIVE_INFINITY
 
-    let nodeId = 0;
-    for (let j = 0; j <= NY; j++) {
+    model.beginConstruction(); {
+        model.beginNodes(); {
+
+            let nodeId = 0;
+            for (let j = 0; j <= NY; j++) {
+                for (let i = 0; i <= NX; i++) {
+                    const x = (i / NX) * width - width / 2;
+                    const baseY = (j / NY) * height - height / 2;
+
+                    // Complex folding with multiple wavelengths
+                    let foldY = 0;
+                    if (j > 0) {
+                        foldY = amplitude * Math.sin((i / NX) * Math.PI * 2) * (j / NY) * 0.7 +
+                            amplitude * 0.3 * Math.sin((i / NX) * Math.PI * 4) * (j / NY);
+                    }
+
+                    const y = baseY + foldY;
+
+                    if (y > max) {
+                        max = y
+                    }
+
+                    model.addNode(nodeId, x, y);
+                    nodeId++;
+                }
+            }
+        }
+        model.endNodes()
+        model.beginTriangles(); {
+
+            // Create triangular elements
+            let triangleId = 0;
+            for (let j = 0; j < NY; j++) {
+                for (let i = 0; i < NX; i++) {
+                    const n1 = j * (NX + 1) + i;
+                    const n2 = j * (NX + 1) + i + 1;
+                    const n3 = (j + 1) * (NX + 1) + i;
+                    const n4 = (j + 1) * (NX + 1) + i + 1;
+
+                    model.addTriangle(triangleId++, [n1, n2, n3], limestone);
+                    model.addTriangle(triangleId++, [n2, n4, n3], limestone);
+                }
+            }
+
+        }
+        model.endTriangles()
+
+        // Translate nodes
+        model.getNodes().forEach(node => {
+            node.position.y -= max + 1;
+            node.originalPosition.y = max + 1;
+        });
+        // Fix bottom and side nodes
         for (let i = 0; i <= NX; i++) {
-            const x = (i / NX) * width - width / 2;
-            const baseY = (j / NY) * height - height / 2;
-
-            // Complex folding with multiple wavelengths
-            let foldY = 0;
-            if (j > 0) {
-                foldY = amplitude * Math.sin((i / NX) * Math.PI * 2) * (j / NY) * 0.7 +
-                    amplitude * 0.3 * Math.sin((i / NX) * Math.PI * 4) * (j / NY);
-            }
-
-            const y = baseY + foldY;
-
-            if (y > max) {
-                max = y
-            }
-
-            model.addNode(nodeId, x, y);
-            nodeId++;
+            model.setFixedNode(i, true, true); // Bottom
         }
     }
-
-    // translate
-    model.getNodes().forEach(node => {
-        node.position.y -= max + 1;
-        node.originalPosition.y = max + 1;
-    });
-
-    // Create triangular elements
-    let triangleId = 0;
-    for (let j = 0; j < NY; j++) {
-        for (let i = 0; i < NX; i++) {
-            const n1 = j * (NX + 1) + i;
-            const n2 = j * (NX + 1) + i + 1;
-            const n3 = (j + 1) * (NX + 1) + i;
-            const n4 = (j + 1) * (NX + 1) + i + 1;
-
-            model.addTriangle(triangleId++, [n1, n2, n3], limestone);
-            model.addTriangle(triangleId++, [n2, n4, n3], limestone);
-        }
-    }
-
-    // Fix bottom and side nodes
-    for (let i = 0; i <= NX; i++) {
-        model.setFixedNode(i, true, true); // Bottom
-    }
+    model.endConstruction()
 
     updateVisualization();
 }
@@ -409,7 +429,7 @@ function clearMesh() {
     // Remove all mesh objects from scene
     const objectsToRemove = [];
     scene.traverse((child) => {
-        if (child.userData.type === 'node' || child.userData.type === 'triangle' || 
+        if (child.userData.type === 'node' || child.userData.type === 'triangle' ||
             child.userData.type === 'wireframe' || child.userData.type === 'displacement') { // Updated
             objectsToRemove.push(child);
         }
@@ -526,7 +546,7 @@ function handleNodeClick(nodeId) {
 function createDisplacementVector(node) {
     const displacement = node.displacement;
     const magnitude = Math.sqrt(displacement.x * displacement.x + displacement.y * displacement.y);
-    
+
     // Only create vector if displacement is significant
     if (magnitude < 0.01) {
         return;
@@ -534,16 +554,16 @@ function createDisplacementVector(node) {
 
     // Scale factor for visualization (adjust as needed)
     const scaleFactor = 1.0;
-    
+
     // Create arrow geometry
     const direction = new THREE.Vector3(displacement.x, displacement.y, 0).normalize();
     const origin = new THREE.Vector3(node.originalPosition.x, node.originalPosition.y, 0.1);
     const length = magnitude * scaleFactor;
-    
+
     const arrowHelper = new THREE.ArrowHelper(direction, origin, length, COLORS.displacement, length * 0.2, length * 0.1);
     arrowHelper.userData.type = 'displacement';
     arrowHelper.userData.nodeId = node.id;
-    
+
     scene.add(arrowHelper);
     displacementVectors.set(node.id, arrowHelper);
 }
@@ -570,16 +590,16 @@ function handleNodeDragStart(event) {
         if (node && !node.isFixed) {
             isDraggingNode = true;
             draggedNodeId = nodeId;
-            
+
             // Store initial mouse position
             dragStartMouse.set(mouse.x, mouse.y);
-            
+
             // Store initial node position
             dragStartNodePos.set(node.position.x, node.position.y);
-            
+
             // Change cursor to indicate dragging
             document.body.style.cursor = 'grabbing';
-            
+
             // Prevent camera panning while dragging
             event.preventDefault();
         }
@@ -609,7 +629,7 @@ function handleNodeDrag(event) {
     if (node) {
         const newX = dragStartNodePos.x + worldDelta.x;
         const newY = dragStartNodePos.y + worldDelta.y;
-        
+
         // Only move if not fixed in that direction
         if (!node.fixedX) {
             node.position.x = newX;
@@ -621,7 +641,7 @@ function handleNodeDrag(event) {
             // Update displacement relative to original position
             node.displacement.y = node.position.y - node.originalPosition.y;
         }
-        
+
         // Update visualization
         updateNodeVisuals();
     }
@@ -631,10 +651,10 @@ function handleNodeDragEnd(event) {
     if (isDraggingNode) {
         isDraggingNode = false;
         draggedNodeId = null;
-        
+
         // Reset cursor
         document.body.style.cursor = 'default';
-        
+
         // Log the final position for debugging
         const node = model.getNode(draggedNodeId);
         if (node) {
@@ -663,7 +683,7 @@ function updateVisualization() {
     nodeObjects.clear();
     triangleObjects.clear();
     wireframeObjects.clear();
-    
+
     // Clear displacement vectors
     for (const [nodeId, vector] of displacementVectors) {
         scene.remove(vector);
@@ -672,7 +692,7 @@ function updateVisualization() {
 
     const objectsToRemove = [];
     scene.traverse((child) => {
-        if (child.userData.type === 'node' || child.userData.type === 'triangle' || 
+        if (child.userData.type === 'node' || child.userData.type === 'triangle' ||
             child.userData.type === 'wireframe' || child.userData.type === 'displacement') {
             objectsToRemove.push(child);
         }
@@ -697,7 +717,7 @@ function updateVisualization() {
 }
 
 function createTriangleObject(triangle) {
-    const [id1, id2, id3] = triangle.nodes.map( node => node.id);
+    const [id1, id2, id3] = triangle.nodes.map(node => node.id);
     const nodes = [
         model.nodes.get(id1),
         model.nodes.get(id2),
@@ -738,7 +758,7 @@ function createTriangleObject(triangle) {
     const wireframeMesh = new THREE.LineSegments(wireframe, wireframeMaterial);
     wireframeMesh.userData.type = 'wireframe';
     wireframeMesh.userData.triangleId = triangle.id;
-    
+
     scene.add(wireframeMesh);
     wireframeObjects.set(triangle.id, wireframeMesh);
 }
@@ -846,7 +866,7 @@ function updateNodeVisuals() {
             nodes[2].position.x, nodes[2].position.y, 0
         ]);
         geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-        
+
         const wireframe = new THREE.WireframeGeometry(geometry);
         wireframeObject.geometry.dispose();
         wireframeObject.geometry = wireframe;

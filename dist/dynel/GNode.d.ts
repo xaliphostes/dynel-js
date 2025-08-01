@@ -7,6 +7,7 @@ export declare class GNode {
     initialize(): void;
     nodalForce(): Point2D;
     nodalDisplacement(): Point2D | undefined;
+    private extractIdFromTriangle;
     private computeStiffness;
     id: number;
     position: Point2D;

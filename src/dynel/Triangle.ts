@@ -3,14 +3,17 @@ import { GNode } from "./GNode";
 import { Point2D } from "./Point2D";
 
 export class Triangle {
-    constructor(id: number, n1: GNode, n2: GNode, n3: GNode, materialProps: Material) {
+    constructor(id: number, n1: GNode, n2: GNode, n3: GNode, material: Material) {
         this.id = id;
         this.nodes = [n1, n2, n3];
-        this.materialProps = materialProps;
+        this.material = material;
         this.area = this.computeArea();
-        this.strain = [0, 0, 0]; // εxx, εyy, γxy
-        this.stress = [0, 0, 0]; // σxx, σyy, τxy
+        // this.strain = [0, 0, 0]; // εxx, εyy, γxy
+        // this.stress = [0, 0, 0]; // σxx, σyy, τxy
         this.shapeFunctionDerivatives = this.computeShapeFunctionDerivatives()
+        n1.addTriangle(this)
+        n2.addTriangle(this)
+        n3.addTriangle(this)
     }
 
     initialize() {
@@ -32,13 +35,12 @@ export class Triangle {
 
     nodeIds() { return this.nodes.map(node => node!.id) }
 
+    node(id: number): GNode {
+        return this.nodes[id]
+    }
+
     nodalForces(): Map<number, Point2D> {
-        const strain = this.computeStrain()
-        const stress = this.computeStress(strain)
-
-        // triangle.strain = strain;
-        // triangle.stress = stress;
-
+        const stress = this.computeStress(this.computeStrain())
         const area = this.area;
         const thickness = 1.0;
 
@@ -61,6 +63,20 @@ export class Triangle {
         return nodalForces;
     }
 
+    /**
+     * Get the strain in the form [εxx, εyy, γxy]
+     */
+    get strain() {
+        return this.computeStrain()
+    }
+
+    /**
+     * Get the stress in the form [σxx, σyy, τxy]
+     */
+    get stress() {
+        return this.computeStress(this.computeStrain())
+    }
+
     // ---------------------------------------------------------------------
 
     /**
@@ -68,7 +84,8 @@ export class Triangle {
      * This uses the material properties and shape function derivatives.
      */
     private computeStiffness(): number[][] {
-        const { youngModulus: E, poissonRatio: nu } = this.materialProps;
+        const E = this.material.youngModulus
+        const nu = this.material.poissonRatio
         const area = this.area;
         const dN = this.shapeFunctionDerivatives
 
@@ -123,7 +140,7 @@ export class Triangle {
     }
 
     private computeStress(strain: number[]): number[] {
-        const D = this.materialProps.D
+        const D = this.material.D
 
         // Stress = D * strain
         const stress = [0, 0, 0];
@@ -156,11 +173,9 @@ export class Triangle {
 
     id: number = -1;
     nodes: [GNode, GNode, GNode]
-    materialProps: Material = new Material(1.0, 0.3, 1.0);
+    material: Material = new Material(1.0, 0.3, 1.0);
     area: number = 0;
-    strain: number[] = [0, 0, 0];
-    stress: number[] = [0, 0, 0];
     shapeFunctionDerivatives: number[][] = [[0, 0], [0, 0], [0, 0]];
     B: number[][] = [] // Strain-displacement matrix
-    K: number[][] = [] // Stiffness matrix
+    K: number[][] = [] // Stiffness matrix (2D spring)
 }

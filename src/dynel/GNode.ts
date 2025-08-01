@@ -73,6 +73,12 @@ export class GNode {
 
     // --------------------------------------------------
 
+    private extractIdFromTriangle(triangle: Triangle): number {
+        if (triangle.node(0) === this) return 0
+        if (triangle.node(1) === this) return 1
+        return 2
+    }
+
     // TODO: precompute the striffness K and k^{-1}
     private computeStiffness(): number[][] {
         const stiff = [[0, 0], [0, 0]];
@@ -80,7 +86,7 @@ export class GNode {
         this.triangles.forEach(triangle => {
             const elementK = triangle.stiffness;
             // Extract nodal contribution (2x2 submatrix)
-            const startIdx = this.id * 2;
+            const startIdx = this.extractIdFromTriangle(triangle) * 2;
             stiff[0][0] += elementK[startIdx][startIdx];
             stiff[0][1] += elementK[startIdx][startIdx + 1];
             stiff[1][0] += elementK[startIdx + 1][startIdx];
