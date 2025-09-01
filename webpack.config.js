@@ -1,5 +1,4 @@
 const path = require('path');
-const connect = require('connect');
 
 module.exports = {
     entry: './src/index.ts',

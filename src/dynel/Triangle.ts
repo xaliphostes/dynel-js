@@ -17,6 +17,7 @@ export class Triangle {
     }
 
     initialize() {
+        // Recompute area and shape function derivatives after initialization
         this.area = this.computeArea();
         this.shapeFunctionDerivatives = this.computeShapeFunctionDerivatives()
 
